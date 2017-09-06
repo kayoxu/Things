@@ -70,7 +70,8 @@ public class ThingsApplication extends Application {
     }
 
     /**
-     * @param runnable 把Runnable 方法提交到主线程运行
+     * 把Runnable 方法提交到主线程运行
+     * @param runnable Runnable
      */
     public static void runOnUiThread(Runnable runnable) {
         // 在主线程运行
