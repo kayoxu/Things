@@ -33,7 +33,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
         val bcm4 = GpioTools.openGpio("BCM4")
         if (bcm4 != null) {
             val eService = Executors.newSingleThreadScheduledExecutor()
