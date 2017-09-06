@@ -43,6 +43,8 @@ class MainActivity : Activity() {
             }, 0, 200, TimeUnit.MILLISECONDS)
         }
 
+        val msg = Message()
+        ThingsApplication().mHandler.sendMessage(msg)
 
     }
 }
