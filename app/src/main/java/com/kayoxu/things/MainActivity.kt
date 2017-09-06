@@ -43,6 +43,8 @@ class MainActivity : Activity() {
         }
 
         val msg = Message()
+
+        
         ThingsApplication().mHandler.sendMessage(msg)
 
     }
