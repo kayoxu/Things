@@ -33,8 +33,7 @@ public class ThingsApplication extends Application {
 
     }
 
-    @SuppressLint("HandlerLeak")
-    public final Handler mHandler = new Handler() {
+     public final Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
