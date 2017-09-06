@@ -69,6 +69,7 @@ public class ThingsApplication extends Application {
         return handler;
     }
 
+
     /**
      * 把Runnable 方法提交到主线程运行
      * @param runnable Runnable
