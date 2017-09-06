@@ -38,7 +38,6 @@ public class ThingsApplication extends Application {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
-
             Intent intent = new Intent(GlobalDefine.ACTION_INTENT_GENERAL);
             intent.putExtra("what", msg.what);
             intent.putExtra("arg1", msg.arg1);
