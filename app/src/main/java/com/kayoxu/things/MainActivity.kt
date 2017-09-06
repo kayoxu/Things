@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
  */
 class MainActivity : Activity() {
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -37,7 +38,7 @@ class MainActivity : Activity() {
 
         val bcm4 = GpioTools.openGpio("BCM4")
         if (bcm4 != null) {
-            val eService = Executors.newSingleThreadScheduledExecutor();
+            val eService = Executors.newSingleThreadScheduledExecutor()
             eService.scheduleAtFixedRate(Runnable {
                 bcm4.setDirection(if (bcm4.value) Gpio.DIRECTION_OUT_INITIALLY_LOW else Gpio.DIRECTION_OUT_INITIALLY_HIGH)
             }, 0, 200, TimeUnit.MILLISECONDS)
