@@ -1,6 +1,7 @@
-package com.kayoxu.things.tools;
+package com.kayoxu.things.drivers;
 
 import com.google.android.things.pio.Gpio;
+import com.kayoxu.things.tools.PeripheralTools;
 
 import java.io.IOException;
 

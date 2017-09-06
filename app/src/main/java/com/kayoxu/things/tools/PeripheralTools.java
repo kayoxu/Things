@@ -9,9 +9,9 @@ import java.util.List;
  */
 
 public class PeripheralTools {
-    static PeripheralManagerService service;
+    public static PeripheralManagerService service;
 
-    static void getGpioManagerSerive() {
+    public static void getGpioManagerSerive() {
         if (service == null) {
             service = new PeripheralManagerService();
         }
