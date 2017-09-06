@@ -33,6 +33,9 @@ public class ThingsApplication extends Application {
 
     }
 
+
+
+
      public final Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
