@@ -11,7 +11,6 @@ import java.io.IOException;
 
 public class GpioTools extends PeripheralTools {
 
-
     public static Gpio openGpio(String gpioName) {
         getGpioManagerSerive();
         try {
