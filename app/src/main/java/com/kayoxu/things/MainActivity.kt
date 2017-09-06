@@ -2,7 +2,6 @@ package com.kayoxu.things
 
 import android.app.Activity
 import android.os.Bundle
-import android.os.Message
 import com.google.android.things.pio.Gpio
 import com.kayoxu.things.tools.GpioTools
 import java.util.concurrent.Executors
@@ -29,23 +28,22 @@ import java.util.concurrent.TimeUnit
  *
  */
 class MainActivity : Activity() {
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContentView(R.layout.activity_main)
+
+
+
         val bcm4 = GpioTools.openGpio("BCM4")
         if (bcm4 != null) {
-            val eService = Executors.newSingleThreadScheduledExecutor()
+            val eService = Executors.newSingleThreadScheduledExecutor();
             eService.scheduleAtFixedRate(Runnable {
                 bcm4.setDirection(if (bcm4.value) Gpio.DIRECTION_OUT_INITIALLY_LOW else Gpio.DIRECTION_OUT_INITIALLY_HIGH)
-            }, 0, 200, TimeUnit.MILLISECONDS)
+            },0,200,TimeUnit.MILLISECONDS)
         }
 
-        val msg = Message()
 
-        
-        ThingsApplication().mHandler.sendMessage(msg)
 
     }
 }
