@@ -105,8 +105,6 @@ public class Rc522Manager extends SpiDeviceManager {
 
 
     }
-
-
     /**
      * Disables or enables the RC522's antenna
      *
@@ -123,7 +121,6 @@ public class Rc522Manager extends SpiDeviceManager {
         }
     }
 
-
     /**
      * Performs a soft resetSpiDevice on the Rc522
      */
@@ -132,4 +129,44 @@ public class Rc522Manager extends SpiDeviceManager {
     }
 
 
+    /**
+     * Gets the UID of the last card that was successfully read. This may be empty if no card has
+     * been read before.
+     *
+     * @return A byte array containing the card's UID.
+     */
+    public byte[] getUid() {
+        return uid;
+    }
+
+    /**
+     * Returns a string representation of the last read tag's UID
+     *
+     * @param separator The character that separates each element of the uid
+     * @return A string representing the tag's UID
+     */
+    public String getUidString(String separator) {
+        if (this.uid == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        String prefix = "";
+        for (byte b : this.uid) {
+            int ubyte = b & 0xff;
+            if (ubyte == 0) {
+                break;
+            }
+            sb.append(prefix);
+            prefix = separator;
+            sb.append(ubyte);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Returns a string representation of the last read tag's UID, separated by '-'
+     */
+    public String getUidString() {
+        return getUidString("-");
+    }
 }
