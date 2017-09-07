@@ -1,12 +1,19 @@
 package com.kayoxu.things.driver.manager;
 
+import android.util.Log;
+
 import com.google.android.things.pio.Gpio;
 import com.google.android.things.pio.SpiDevice;
+import com.kayoxu.things.utils.LogUtil;
+import com.kayoxu.things.utils.util;
 
 import java.io.IOException;
 
+import javax.annotation.Nullable;
+
 /**
  * Created by KayoXu on 2017/9/7.
+ * https://github.com/Galarzaa90/android-things-rc522
  */
 
 public class Rc522Manager extends SpiDeviceManager {
@@ -15,6 +22,7 @@ public class Rc522Manager extends SpiDeviceManager {
     private SpiDevice spiDevice;
     private Gpio resetPin;
     private int busSpeed = 1000000;
+    private static final char[] HEX_CHARS = "0123456789ABCDEF".toCharArray();
 
     private byte[] uid;
 
@@ -105,6 +113,7 @@ public class Rc522Manager extends SpiDeviceManager {
 
 
     }
+
     /**
      * Disables or enables the RC522's antenna
      *
@@ -120,6 +129,7 @@ public class Rc522Manager extends SpiDeviceManager {
             clearBitMask(REGISTER_TX_CONTROL, (byte) 0x03);
         }
     }
+
 
     /**
      * Performs a soft resetSpiDevice on the Rc522
@@ -169,4 +179,694 @@ public class Rc522Manager extends SpiDeviceManager {
     public String getUidString() {
         return getUidString("-");
     }
+
+    /**
+     * Executes a command by writing data to the FIFO buffer and calling the command.
+     * It waits for the command to complete and then reads the FIFO buffer again
+     *
+     * @param command the command to execute, as shown in section 10.3 in MFRC522's datasheet
+     * @param data    byte array that will be written in the FIFO buffer
+     * @return the data in the FIFO buffer after executing the command
+     */
+    private boolean execute(byte command, byte[] data) {
+        backData = new byte[16];
+        backLength = 0;
+        byte irq = 0;
+        byte irqWait = 0;
+        byte lastBits = 0;
+        boolean success = false;
+        if (command == COMMAND_MF_AUTHENT) {
+            irq = 0x12;
+            irqWait = 0x10;
+        }
+        if (command == COMMAND_TRANSCEIVE) {
+            irq = 0x77;
+            irqWait = 0x30;
+        }
+        writeRegister(REGISTER_COMMAND, COMMAND_IDLE);
+        writeRegister(REGISTER_COM_IRQ, (byte) 0x7F);
+        writeRegister(REGISTER_FIFO_LEVEL, (byte) 0x80);
+        writeRegister(REGISTER_INTERRUPT_ENABLE, (byte) (irq | 0x80));
+
+        for (byte d : data) {
+            writeRegister(REGISTER_FIFO_DATA, d);
+        }
+
+        writeRegister(REGISTER_COMMAND, command);
+        if (command == COMMAND_TRANSCEIVE) {
+            setBitMask(REGISTER_BIT_FRAMING, (byte) 0x80);
+        }
+        long start = System.nanoTime();
+        long end = 0;
+        do {
+            byte n = readRegister(REGISTER_COM_IRQ);
+            if ((n & irqWait) != 0) {
+                success = true;
+                break;
+            }
+            if ((n & 0x01) != 0) {
+                return false;
+            }
+            end = System.nanoTime();
+        } while (start + 35700000L > end);
+        if (!success) {
+            return false;
+        }
+        byte errorValue = readRegister(REGISTER_ERROR);
+        if ((errorValue & 0x13) != 0) {
+            return false;
+        }
+        clearBitMask(REGISTER_BIT_FRAMING, (byte) 0x80);
+        if (command == COMMAND_TRANSCEIVE) {
+            byte n = readRegister(REGISTER_FIFO_LEVEL);
+            lastBits = (byte) (readRegister(REGISTER_CONTROL) & 0x07);
+            if (lastBits != 0) {
+                backLength = (n - 1) * 8 + lastBits;
+            } else {
+                backLength = n * 8;
+            }
+            if (n == 0) {
+                n = 1;
+            }
+
+            if (n > MAX_LENGTH) {
+                n = MAX_LENGTH;
+            }
+
+            for (byte i = 0; i < n; i++) {
+                backData[i] = readRegister(REGISTER_FIFO_DATA);
+                backDataLength = i + 1;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Requests for a tag
+     *
+     * @return true if a tag is present
+     */
+    public boolean request() {
+        return this.request(COMMAND_REQUIRE_ID);
+    }
+
+    /**
+     * Requests for a tag
+     *
+     * @param requestMode the type of request being made
+     * @return true if a tag is present
+     */
+    public boolean request(byte requestMode) {
+        byte tagType[] = new byte[]{requestMode};
+
+        writeRegister(REGISTER_BIT_FRAMING, (byte) 0x07);
+
+        boolean success = execute(COMMAND_TRANSCEIVE, tagType);
+        if (!success || backLength != 0x10) {
+            backLength = 0;
+            success = false;
+        }
+        return success;
+
+    }
+
+    /**
+     * Checks for collision errors
+     *
+     * @return true if there are no collision errors
+     */
+    public boolean antiCollisionDetect() {
+        int serial_number_check = 0;
+        int i;
+
+        writeRegister(REGISTER_BIT_FRAMING, (byte) 0x00);
+        byte[] serial_number = new byte[]{COMMAND_ANTICOLLISION, 0x20};
+
+        boolean success = execute(COMMAND_TRANSCEIVE, serial_number);
+        if (success) {
+            if (backDataLength == 5) {
+                for (i = 0; i < 4; i++) {
+                    serial_number_check ^= backData[i];
+                }
+                if (serial_number_check != backData[4]) {
+                    return false;
+                }
+            }
+            uid = backData;
+        }
+        return success;
+    }
+
+    /**
+     * Calculates the CRC value
+     *
+     * @param data the data the crc value wil lbe generated for
+     * @return 2-byte array containing the crc value or null if something failed
+     */
+    @Nullable
+    private byte[] calculateCrc(byte[] data) {
+        writeRegister(REGISTER_COMMAND, COMMAND_IDLE);
+        writeRegister(REGISTER_DIV_IRQ, (byte) 0x04);
+        writeRegister(REGISTER_FIFO_LEVEL, (byte) 0x80);
+
+        for (int i = 0; i < data.length - 2; i++) {
+            writeRegister(REGISTER_FIFO_DATA, data[i]);
+        }
+        writeRegister(REGISTER_COMMAND, COMMAND_CALCULATE_CRC);
+        long start = System.nanoTime();
+        long end = 0;
+        do {
+            byte n = readRegister(REGISTER_DIV_IRQ);
+            //Check if CRCIRq bit is set
+            if ((n & 0x04) != 0) {
+                writeRegister(REGISTER_COMMAND, COMMAND_IDLE);
+                return new byte[]{readRegister(REGISTER_CRC_RESULT_LOW), readRegister(REGISTER_CRC_RESULT_HIGH)};
+            }
+            end = System.nanoTime();
+        } while (start + 89000000L >= end);
+        // error = ErrorType.ERROR_TIMEOUT;
+        Log.w(TAG, "Timed out calculating CRC");
+        return null;
+    }
+
+    /**
+     * Selects the tag to be used in following operations
+     *
+     * @param uid Byte array containing the tag's uid
+     * @return true if no errors occurred
+     */
+    public boolean selectTag(byte[] uid) {
+        boolean success;
+        byte data[] = new byte[9];
+        int i, j;
+
+        data[0] = COMMAND_SELECT;
+        data[1] = 0x70;
+
+        for (i = 0, j = 2; i < 5; i++, j++)
+            data[j] = uid[i];
+
+        byte[] crc = calculateCrc(data);
+        if (crc == null) {
+            return false;
+        }
+        data[7] = crc[0];
+        data[8] = crc[1];
+        success = execute(COMMAND_TRANSCEIVE, data);
+        return success && backLength == 0x18;
+    }
+
+    /**
+     * Authenticates the use of a specific address. The tag must be selected before.
+     * For reference, see section 10.3.1.9 MFAuthent in MFRC522's datasheet
+     *
+     * @param authMode The authentication mode, {@link #AUTH_A} or {@link #AUTH_B}
+     * @param address  The byte address of the block to authenticate for
+     * @param key      A six byte array containing the key used to authenticate
+     * @return true if authentication was successful
+     */
+    public boolean authenticateCard(byte authMode, byte address, byte[] key) {
+        LogUtil.e(TAG, "authenticateCard: authMode: %s, address: %d, key: %s",
+                (authMode == AUTH_A ? "A" : "B"),
+                address,
+                dataToHexString(key));
+        byte data[] = new byte[12];
+        int i, j;
+
+        data[0] = authMode;
+        data[1] = address;
+        for (i = 0, j = 2; i < 6; i++, j++)
+            data[j] = key[i];
+        for (i = 0, j = 8; i < 4; i++, j++)
+            data[j] = uid[i];
+
+        boolean success = execute(COMMAND_MF_AUTHENT, data);
+        if ((readRegister(REGISTER_RXTX_STATUS) & 0x08) == 0) {
+            return false;
+        }
+        return success;
+    }
+
+    /**
+     * Ends operations that use crypto and cleans up
+     */
+    public void stopCrypto() {
+        clearBitMask(REGISTER_RXTX_STATUS, (byte) 0x08);
+    }
+
+    /**
+     * Reads the current data stored in the tag's block.
+     * Authentication is required
+     *
+     * @param address the address of the block to read data from
+     * @param buffer  the byte array to store the read data to. Length must be 16
+     * @return true if reading was successful
+     */
+    public boolean readBlock(byte address, byte[] buffer) {
+        LogUtil.e(TAG, "readBlock: address: %d", address);
+        byte data[] = new byte[4];
+        data[0] = COMMAND_READ;
+        data[1] = address;
+        byte[] crc = calculateCrc(data);
+        if (crc == null) {
+            return false;
+        }
+        data[2] = crc[0];
+        data[3] = crc[1];
+        boolean success = execute(COMMAND_TRANSCEIVE, data);
+        if (!success) {
+            return false;
+        }
+        if (backDataLength != 16) {
+            return false;
+        }
+        System.arraycopy(backData, 0, buffer, 0, 16);
+        return true;
+    }
+
+    /**
+     * Reads the current data stored in the tag's block.
+     * Authentication is required
+     *
+     * @param address the byte address of the block to read from
+     * @return 16 bytes array of the current value in that block
+     * @deprecated Use {@link #readBlock(byte, byte[])} as it can report read status
+     */
+    @Deprecated
+    public byte[] readBlock(byte address) {
+        byte value[] = new byte[16];
+        readBlock(address, value);
+        return value;
+    }
+
+    /**
+     * Writes data to a block in the tag.
+     * Authentication is required.
+     *
+     * @param address the byte address of the block to write to
+     * @param data    16 byte array with the data that wants to be written
+     * @return true if writing was successful
+     */
+    public boolean writeBlock(byte address, byte[] data) {
+        LogUtil.e(TAG, "writeBlock: address: %d, data: %s", address, dataToHexString(data));
+        byte buff[] = new byte[4];
+        buff[0] = COMMAND_WRITE;
+        buff[1] = address;
+        byte[] crc = calculateCrc(buff);
+        if (crc == null) {
+            return false;
+        }
+        buff[2] = crc[0];
+        buff[3] = crc[1];
+
+        boolean success = execute(COMMAND_TRANSCEIVE, buff);
+        if (!success) {
+            return false;
+        }
+        if (backLength != 4 || (backData[0] & 0x0F) != 0x0A) {
+            return false;
+        }
+
+        byte buffWrite[] = new byte[data.length + 2];
+        System.arraycopy(data, 0, buffWrite, 0, data.length);
+        crc = calculateCrc(buffWrite);
+        if (crc == null) {
+            return false;
+        }
+        buffWrite[buffWrite.length - 2] = crc[0];
+        buffWrite[buffWrite.length - 1] = crc[1];
+        success = execute(COMMAND_TRANSCEIVE, buffWrite);
+        return success && !(backLength != 4 || (backData[0] & 0x0F) != 0x0A);
+    }
+
+    /**
+     * Writes data to a block in the tag.
+     * Authentication is required.
+     *
+     * @param address the byte address of the block to write to
+     * @param data    16 byte array with the data that wants to be written
+     * @deprecated renamed to {@link #writeBlock(byte, byte[])}.
+     */
+    @Deprecated
+    public boolean write(byte address, byte[] data) {
+        return writeBlock(address, data);
+    }
+
+    /**
+     * Increases the value of a block by the specified operand.
+     * The data is stored in the internal transfer buffer.
+     * The block must be a value block.
+     * Tag must be selected and block authenticated
+     *
+     * @param address the block's address
+     * @param operand the sum's operand
+     * @return true if operation was successful
+     */
+    public boolean increaseBlock(byte address, int operand) {
+        LogUtil.e(TAG, "increaseBlock: address %d, operand %d", address, operand);
+        byte buff[] = new byte[4];
+        buff[0] = COMMAND_INCREMENT;
+        buff[1] = address;
+        byte[] crc = calculateCrc(buff);
+        if (crc == null) {
+            return false;
+        }
+        buff[2] = crc[0];
+        buff[3] = crc[1];
+        boolean success = execute(COMMAND_TRANSCEIVE, buff);
+        if (backLength != 4 || (backData[0] & 0x0F) != 0x0A) {
+            return false;
+        }
+        byte buffWrite[] = new byte[6];
+        System.arraycopy(util.intToByteArray(operand), 0, buffWrite, 0, 4);
+        crc = calculateCrc(buffWrite);
+        if (crc == null) {
+            return false;
+        }
+        buffWrite[buffWrite.length - 2] = crc[0];
+        buffWrite[buffWrite.length - 1] = crc[1];
+        execute(COMMAND_TRANSCEIVE, buffWrite);
+        return true;
+    }
+
+    /**
+     * Decreases the value of a block by the specified operand.
+     * The data is stored in the internal transfer buffer.
+     * The block must be a value block.
+     * Tag must be selected and block authenticated
+     *
+     * @param address the block's address
+     * @param operand the substraction's operand
+     * @return true if operation was successful
+     */
+    public boolean decreaseBlock(byte address, int operand) {
+        LogUtil.e(TAG, "increaseBlock: address %d, operand %d", address, operand);
+        byte buff[] = new byte[4];
+        buff[0] = COMMAND_DECREMENT;
+        buff[1] = address;
+        byte[] crc = calculateCrc(buff);
+        if (crc == null) {
+            return false;
+        }
+        buff[2] = crc[0];
+        buff[3] = crc[1];
+        boolean success = execute(COMMAND_TRANSCEIVE, buff);
+        if (!success) {
+            return false;
+        }
+        if (backLength != 4 || (backData[0] & 0x0F) != 0x0A) {
+            return false;
+        }
+        byte buffWrite[] = new byte[6];
+        System.arraycopy(util.intToByteArray(operand), 0, buffWrite, 0, 4);
+        crc = calculateCrc(buffWrite);
+        if (crc == null) {
+            return false;
+        }
+        buffWrite[buffWrite.length - 2] = crc[0];
+        buffWrite[buffWrite.length - 1] = crc[1];
+        execute(COMMAND_TRANSCEIVE, buffWrite);
+        return true;
+    }
+
+    /**
+     * Writes the contents of the transfer buffer to a block
+     *
+     * @param address the address of the block to write to
+     * @return true if operation was successful
+     */
+    public boolean transferBlock(byte address) {
+        LogUtil.e(TAG, "transferBlock: address: %d", address);
+        byte buff[] = new byte[4];
+        buff[0] = COMMAND_TRANSFER;
+        buff[1] = address;
+        byte[] crc = calculateCrc(buff);
+        if (crc == null) {
+            return false;
+        }
+        buff[2] = crc[0];
+        buff[3] = crc[1];
+        return execute(COMMAND_TRANSCEIVE, buff);
+    }
+
+
+    /**
+     * Writes on the transfer buffer the contents of a value block
+     *
+     * @param address the address of the block to read from
+     * @return true if operation was successful
+     */
+    public boolean restoreBlock(byte address) {
+        LogUtil.e(TAG, "transferBlock: address: %d", address);
+        byte buff[] = new byte[4];
+        buff[0] = COMMAND_RESTORE;
+        buff[1] = address;
+        byte[] crc = calculateCrc(buff);
+        if (crc == null) {
+            return false;
+        }
+        buff[2] = crc[0];
+        buff[3] = crc[1];
+
+        boolean success = execute(COMMAND_TRANSCEIVE, buff);
+        if (!success) {
+            return false;
+        }
+        if (backLength != 4 || (backData[0] & 0x0F) != 0x0A) {
+            return false;
+        }
+        byte buffWrite[] = {0, 0, 0, 0, 0, 0};
+        crc = calculateCrc(buffWrite);
+        if (crc == null) {
+            return false;
+        }
+        buffWrite[buffWrite.length - 2] = crc[0];
+        buffWrite[buffWrite.length - 1] = crc[1];
+        execute(COMMAND_TRANSCEIVE, buffWrite);
+        return true;
+    }
+
+    /**
+     * Writes a 32-bit signed integer to a value block in the required format
+     * The format is specified in section 8.6.2.1 in MIFARE 1k's datasheet
+     * Tag must be selected and block authenticated
+     *
+     * @param address the block's address
+     * @param value   new value to be written to the block
+     * @return true if writing was successful
+     */
+    public boolean writeValue(byte address, int value) {
+        LogUtil.e(TAG, "writeValue: address: %d, value: %d", address, value);
+        byte buffer[] = new byte[16];
+        buffer[0] = (byte) (value & 0xFF);
+        buffer[1] = (byte) ((value & 0xFF00) >> 8);
+        buffer[2] = (byte) ((value & 0xFF0000) >> 16);
+        buffer[3] = (byte) ((value & 0xFF000000) >> 24);
+        buffer[4] = (byte) ~buffer[0];
+        buffer[5] = (byte) ~buffer[1];
+        buffer[6] = (byte) ~buffer[2];
+        buffer[7] = (byte) ~buffer[3];
+        buffer[8] = buffer[0];
+        buffer[9] = buffer[1];
+        buffer[10] = buffer[2];
+        buffer[11] = buffer[3];
+        buffer[12] = address;
+        buffer[13] = (byte) ~address;
+        buffer[14] = address;
+        buffer[15] = (byte) ~address;
+        return writeBlock(address, buffer);
+    }
+
+    /**
+     * Reads a value block and converts the stored value
+     *
+     * @param address the block's address
+     * @return null, if read failed, otherwise it returns an Integer object containing the 32-bit signed value
+     */
+    @Nullable
+    public Integer readValue(byte address) {
+        LogUtil.e(TAG, "readValue: address: %s", address);
+        byte buffer[] = new byte[16];
+        if (!readBlock(address, buffer)) {
+            return null;
+        }
+        return ((buffer[0] & 0xFF) | ((buffer[1] & 0xFF) << 8) | ((buffer[2] & 0xFF) << 16) | ((buffer[3] & 0xFF) << 24));
+    }
+
+    /**
+     * Writes a sector's trailer's data.
+     * This block contains the access configuration for the entire sector, caution must be taken when
+     * modifying its contents as it can lead to inaccessible sectors. Please refer to the tag's documentation
+     * Tag must be selected and sector authenticated first
+     *
+     * @param sector     the sector's number
+     * @param keyA       the new key A that will be set
+     * @param accessBits the access bits that will be set. Can be obtained with {@link #calculateAccessBits(byte[], byte[], byte[])}
+     * @param userData   a single byte containing user data
+     * @param keyB       the new key B that will be set
+     * @return true if writing was successful, false otherwise or if parameters are invalid
+     * @see <a href="http://www.nxp.com/docs/en/data-sheet/MF1S50YYX_V1.pdf#page=12" target="blank">Reference sheet</a>
+     */
+    public boolean writeTrailer(byte sector, byte[] keyA, byte[] accessBits, byte userData, byte[] keyB) {
+        LogUtil.e(TAG, "writeTrailer: address: %d, keyA: %s, accessBits: %s, userData: %d, keyB: %s",
+                sector,
+                dataToHexString(keyA),
+                dataToHexString(accessBits),
+                userData,
+                dataToHexString(keyB));
+        byte address = getBlockAddress(sector, 3);
+        if (keyA.length != 6 || keyB.length != 6 || accessBits.length != 3) {
+            Log.e(TAG, "writeTrailer: Parameter with incorrect length");
+            return false;
+        }
+        byte[] trailer = new byte[16];
+        System.arraycopy(keyA, 0, trailer, 0, 6);
+        System.arraycopy(accessBits, 0, trailer, 6, 3);
+        trailer[9] = userData;
+        System.arraycopy(keyB, 0, trailer, 10, 6);
+        return writeBlock(address, trailer);
+    }
+
+    /**
+     * MIFARE tags blocks are organized in sectors, this calculates the address of a block in a
+     * specific sector
+     *
+     * @param sector the sector number
+     * @param block  the sector's block
+     * @return the block's absolute address
+     */
+    public static byte getBlockAddress(byte sector, byte block) {
+        return (byte) (sector * 4 + block);
+    }
+
+    /**
+     * MIFARE tags blocks are organized in sectors, this calculates the address of a block in a
+     * specific sector
+     *
+     * @param sector the sector number
+     * @param block  the sector's block
+     */
+    public static byte getBlockAddress(int sector, int block) {
+        return getBlockAddress((byte) sector, (byte) block);
+    }
+
+    /**
+     * Converts a data byte array to a string representing its 16 bytes in hexadecimal
+     *
+     * @param data the byte array holding the data
+     * @return A string representing the block's data
+     */
+    public static String dataToHexString(byte[] data) {
+        char[] buffer = new char[data.length * 3];
+        for (int i = 0; i < data.length; i++) {
+            int b = data[i] & 0xFF;
+            buffer[i * 3] = HEX_CHARS[b >>> 4];
+            buffer[i * 3 + 1] = HEX_CHARS[b & 0x0F];
+            buffer[i * 3 + 2] = ' ';
+        }
+        return new String(buffer);
+    }
+
+    /**
+     * Dumps all the data in all data blocks in MIFARE 1K cards with default authentication keys.
+     * Card must be selected using {@link #selectTag(byte[])} before
+     * This won't work if a sector's KEY A or access bits have been changed
+     *
+     * @return string containing all the data
+     */
+    public String dumpMifare1k() {
+        byte[] key = {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        StringBuilder sb = new StringBuilder();
+        for (byte i = 0; i <= 15; i++) {
+            for (byte j = 0; j <= 3; j++) {
+                sb.append("S").append(i).append("B").append(j).append(": ");
+                byte block = getBlockAddress(i, j);
+                byte[] buffer = new byte[16];
+                boolean success = authenticateCard(AUTH_A, block, key);
+                if (!success) {
+                    sb.append("Could not authenticate\n");
+                    continue;
+                }
+                success = readBlock(block, buffer);
+                if (!success) {
+                    sb.append("Could not read");
+                } else {
+                    sb.append(dataToHexString(buffer));
+                }
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /***
+     * Calculates the access bits for a sector trailer (bytes 6 to 7) based on Table 6 and Table 7
+     * on MIFARE 1k's reference
+     * @see <a href="http://www.nxp.com/docs/en/data-sheet/MF1S50YYX_V1.pdf#page=12" target="blank">Reference sheet</a>
+     * @param c1 byte array for the c1 values for block 0, 1, 2 and 3 respectively
+     * @param c2 byte array for the c2 values for block 0, 1, 2 and 3 respectively
+     * @param c3 byte array for the c3 values for block 0, 1, 2 and 3 respectively
+     * @return a 3 byte array containing the access bits
+     */
+    public static byte[] calculateAccessBits(byte[] c1, byte[] c2, byte[] c3) {
+        byte[] accessBits = new byte[3];
+        try {
+            // Byte 6
+            accessBits[0] = (byte) (
+                    ((~c2[3] & 1) << 7) + ((~c2[2] & 1) << 6) + ((~c2[1] & 1) << 5) +
+                            ((~c2[0] & 1) << 4) + ((~c1[3] & 1) << 3) + ((~c1[2] & 1) << 2) +
+                            ((~c1[1] & 1) << 1) + (~c1[0] & 1)
+            );
+            // Byte 7
+            accessBits[1] = (byte) (
+                    ((c1[3] & 1) << 7) + ((c1[2] & 1) << 6) + ((c1[1] & 1) << 5) +
+                            ((c1[0] & 1) << 4) + ((~c3[3] & 1) << 3) + ((~c3[2] & 1) << 2) +
+                            ((~c3[1] & 1) << 1) + (~c3[0] & 1)
+            );
+            // Byte 7
+            accessBits[2] = (byte) (
+                    ((c3[3] & 1) << 7) + ((c3[2] & 1) << 6) + ((c3[1] & 1) << 5) +
+                            ((c3[0] & 1) << 4) + ((c2[3] & 1) << 3) + ((c2[2] & 1) << 2) +
+                            ((c2[1] & 1) << 1) + (c2[0] & 1)
+            );
+            return accessBits;
+        } catch (IndexOutOfBoundsException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Calculates the access bits for a sector trailer (bytes 6 to 7) based on Table 6 and Table 7
+     * on MIFARE 1k's reference
+     *
+     * @param accessConditions a 2d array containing the access conditions for each block
+     * @return a 3 byte array containing the access bits
+     */
+    public static byte[] calculateAccessBits(byte[][] accessConditions) {
+        try {
+            return calculateAccessBits(accessConditions[0], accessConditions[1], accessConditions[2]);
+        } catch (IndexOutOfBoundsException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Calculates the individual access conditions given the access bits
+     *
+     * @param accessBits 3 bytes array containing the access bits of a sector trailer (bytes 6 to 7)
+     * @return a 3-item array representing each of the access conditions (c1,c2,c3), each containing a byte array for the values of each block (0 to 3)
+     */
+    public static byte[][] calculateAccessConditions(byte[] accessBits) {
+        try {
+            return new byte[][]{
+                    {(byte) (accessBits[1] >>> 4 & 1), (byte) (accessBits[1] >>> 5 & 1), (byte) (accessBits[1] >>> 6 & 1), (byte) (accessBits[1] >>> 7 & 1)}, //C1
+                    {(byte) (accessBits[2] & 1), (byte) (accessBits[2] >>> 1 & 1), (byte) (accessBits[2] >>> 2 & 1), (byte) (accessBits[2] >>> 3 & 1)}, //C2
+                    {(byte) (accessBits[2] >>> 4 & 1), (byte) (accessBits[2] >>> 5 & 1), (byte) (accessBits[2] >>> 6 & 1), (byte) (accessBits[2] >>> 7 & 1)} //C3
+            };
+        } catch (IndexOutOfBoundsException e) {
+            return null;
+        }
+    }
+
+
 }

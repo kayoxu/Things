@@ -4,7 +4,7 @@ package com.kayoxu.things.utils;
  * Created by KayoXu on 2017/9/7.
  */
 
-public class utils {
+public class util {
 
     public static byte[] intToByteArray(int a) {
         return new byte[]{
@@ -21,4 +21,7 @@ public class utils {
                 (b[1] & 0xFF) << 16 |
                 (b[0] & 0xFF) << 24;
     }
+
+
+
 }
