@@ -8,7 +8,7 @@ import java.io.IOException;
  * Created by KayoXu on 2017/8/25.
  */
 
-public class PwmTools extends PeripheralTools {
+public class PwmUtil extends BasePeripheral {
 
     public static Pwm openPwm(String pwmName) {
         getPwmManagerSerive();

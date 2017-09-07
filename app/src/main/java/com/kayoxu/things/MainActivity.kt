@@ -4,7 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.os.Message
 import com.google.android.things.pio.Gpio
-import com.kayoxu.things.drivers.peripheral.GpioTools
+import com.kayoxu.things.drivers.peripheral.GpioUtil
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -34,7 +34,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         setContentView(R.layout.activity_main)
-        val bcm4 = GpioTools.openGpio("BCM4")
+        val bcm4 = GpioUtil.openGpio("BCM4")
         if (bcm4 != null) {
             val eService = Executors.newSingleThreadScheduledExecutor()
             eService.scheduleAtFixedRate(Runnable {

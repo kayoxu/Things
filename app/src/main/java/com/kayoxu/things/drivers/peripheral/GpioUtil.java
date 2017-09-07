@@ -8,7 +8,7 @@ import java.io.IOException;
  * Created by KayoXu on 2017/8/25.
  */
 
-public class GpioTools extends PeripheralTools {
+public class GpioUtil extends BasePeripheral {
 
     public static Gpio openGpio(String gpioName) {
         getGpioManagerSerive();
