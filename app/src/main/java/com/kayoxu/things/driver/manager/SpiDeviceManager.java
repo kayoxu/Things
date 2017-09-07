@@ -5,6 +5,14 @@ package com.kayoxu.things.driver.manager;
  */
 
 public class SpiDeviceManager {
+    private static final String TAG = "SpiDeviceManager";
+
+
+
+
+
+
+
 
 
 }
