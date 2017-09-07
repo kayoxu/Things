@@ -1,5 +1,6 @@
 package com.kayoxu.things.drivers.peripheral;
 
+import com.google.android.things.pio.PeripheralManagerService;
 import com.google.android.things.pio.Pwm;
 
 import java.io.IOException;
@@ -11,16 +12,15 @@ import java.io.IOException;
 public class PwmUtil extends BasePeripheral {
 
     public static Pwm openPwm(String pwmName) {
-        getPwmManagerSerive();
+        PeripheralManagerService managerSerive = getManagerSerive();
         try {
-            Pwm pwm = service.openPwm(pwmName);
+            Pwm pwm = managerSerive.openPwm(pwmName);
             return pwm;
         } catch (IOException e) {
             e.printStackTrace();
         }
         return null;
     }
-
 
     public static void closePwm(Pwm pwm) {
         if (pwm != null) {
@@ -33,20 +33,5 @@ public class PwmUtil extends BasePeripheral {
             pwm = null;
         }
     }
-
-    public static void initPwm(Pwm pwm) {
-
-        if (pwm != null) {
-            try {
-                pwm.setPwmFrequencyHz(0.5);//设置频率 HZ
-                pwm.setPwmDutyCycle(50.0);//设置占空比
-                pwm.setEnabled(true);//是能pwm
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
 
 }

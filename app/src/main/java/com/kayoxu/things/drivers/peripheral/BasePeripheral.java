@@ -7,30 +7,12 @@ import com.google.android.things.pio.PeripheralManagerService;
  */
 
 class BasePeripheral {
-    static PeripheralManagerService service;
+    private static PeripheralManagerService service;
 
-    static void getGpioManagerSerive() {
+    synchronized static PeripheralManagerService getManagerSerive() {
         if (service == null) {
             service = new PeripheralManagerService();
         }
+        return service;
     }
-
-    static void getI2cBusManagerSerive() {
-        if (service == null) {
-            service = new PeripheralManagerService();
-        }
-    }
-
-    static void getI2sDeviceManagerSerive() {
-        if (service == null) {
-            service = new PeripheralManagerService();
-        }
-    }
-
-    static void getPwmManagerSerive() {
-        if (service == null) {
-            service = new PeripheralManagerService();
-        }
-    }
-
 }

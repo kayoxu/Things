@@ -1,6 +1,7 @@
 package com.kayoxu.things.drivers.peripheral;
 
 import com.google.android.things.pio.Gpio;
+import com.google.android.things.pio.PeripheralManagerService;
 
 import java.io.IOException;
 
@@ -11,9 +12,9 @@ import java.io.IOException;
 public class GpioUtil extends BasePeripheral {
 
     public static Gpio openGpio(String gpioName) {
-        getGpioManagerSerive();
+        PeripheralManagerService managerSerive = getManagerSerive();
         try {
-            Gpio gpio = service.openGpio(gpioName);
+            Gpio gpio = managerSerive.openGpio(gpioName);
             if (gpio != null) {
                 return gpio;
             }
@@ -23,6 +24,20 @@ public class GpioUtil extends BasePeripheral {
         }
         return null;
     }
+
+    public static void closeGpio(Gpio gpio) {
+        if (gpio != null) {
+            try {
+                gpio.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                gpio = null;
+            }
+            gpio = null;
+        }
+    }
+
 
     public static void setGpioValue(Gpio gpio, boolean value) {
         if (gpio != null) {
@@ -45,38 +60,5 @@ public class GpioUtil extends BasePeripheral {
         return false;
     }
 
-    public static void closeGpio(Gpio gpio) {
-        if (gpio != null) {
-            try {
-                gpio.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                gpio = null;
-            }
-            gpio = null;
-        }
-    }
 
-/*    private static void getGpios() {
-        try {
-            final Gpio bcm4 = service.openGpio("BCM4");
-            bcm4.setDirection(Gpio.DIRECTION_OUT_INITIALLY_LOW);
-
-            Gpio bcm17 = service.openGpio("BCM17");
-            bcm17.setDirection(Gpio.DIRECTION_IN);
-            bcm17.setEdgeTriggerType(Gpio.EDGE_FALLING);
-            bcm17.registerGpioCallback(new GpioCallback() {
-                @Override
-                public boolean onGpioEdge(Gpio gpio) {
-                    setGpioValue(bcm4, !getGpioValue(gpio));
-                    return true;//super.onGpioEdge(gpio);
-                }
-            });
-
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }*/
 }
