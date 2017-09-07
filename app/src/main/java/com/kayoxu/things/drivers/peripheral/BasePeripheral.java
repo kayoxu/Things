@@ -6,10 +6,10 @@ import com.google.android.things.pio.PeripheralManagerService;
  * Created by KayoXu on 2017/8/25.
  */
 
-public class BasePeripheral {
-    public static PeripheralManagerService service;
+class BasePeripheral {
+    static PeripheralManagerService service;
 
-    public static void getGpioManagerSerive() {
+    static void getGpioManagerSerive() {
         if (service == null) {
             service = new PeripheralManagerService();
         }
