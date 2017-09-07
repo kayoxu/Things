@@ -1,4 +1,4 @@
-package com.kayoxu.things.drivers.peripheral;
+package com.kayoxu.things.driver.peripheral;
 
 import com.google.android.things.pio.PeripheralManagerService;
 

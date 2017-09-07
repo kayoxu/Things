@@ -4,7 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.os.Message
 import com.google.android.things.pio.Gpio
-import com.kayoxu.things.drivers.peripheral.GpioUtil
+import com.kayoxu.things.driver.peripheral.GpioUtil
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 

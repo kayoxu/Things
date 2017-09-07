@@ -1,4 +1,4 @@
-package com.kayoxu.things.drivers;
+package com.kayoxu.things.driver;
 
 import android.content.Context;
 import android.util.Log;
@@ -1042,11 +1042,11 @@ public class Rc522 {
      */
     public enum RxGain {
         DB_18(0x0),
-        DB_23(0b1 << 4),
-        DB_33(0b100 << 4),
-        DB_38(0b101 << 4),
-        DB_43(0b110 << 4),
-        DB_48(0b111 << 4);
+        DB_23(0b0001 << 4),
+        DB_33(0b0100 << 4),
+        DB_38(0b0101 << 4),
+        DB_43(0b0110 << 4),
+        DB_48(0b0111 << 4);
 
         private byte value;
 
