@@ -1,4 +1,4 @@
-package com.kayoxu.things.tools;
+package com.kayoxu.things.drivers.peripheral;
 
 import com.google.android.things.pio.Pwm;
 
