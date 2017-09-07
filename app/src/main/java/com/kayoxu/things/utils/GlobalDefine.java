@@ -9,7 +9,7 @@ import com.kayoxu.things.BuildConfig;
 
 public class GlobalDefine {
 
-    public static boolean debug = BuildConfig.DEBUG;
+    static boolean debug = BuildConfig.DEBUG;
 
     public static final String ACTION_INTENT_GENERAL = "com.kayoxu.things.broadcast.general";
 
