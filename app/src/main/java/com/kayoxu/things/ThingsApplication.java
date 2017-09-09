@@ -43,6 +43,7 @@ public class ThingsApplication extends Application {
             intent.putExtra("arg1", msg.arg1);
             intent.putExtra("arg2", msg.arg2);
             sendBroadcast(intent);
+            //github
         }
     };
 
