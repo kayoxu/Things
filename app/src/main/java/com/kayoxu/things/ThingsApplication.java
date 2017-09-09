@@ -44,7 +44,6 @@ public class ThingsApplication extends Application {
             intent.putExtra("arg2", msg.arg2);
             sendBroadcast(intent);
             //github
-
         }
     };
 
